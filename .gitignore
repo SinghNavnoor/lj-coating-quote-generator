@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# Streamlit secrets (never commit)
+.streamlit/secrets.toml
+
+# Quote counter (runtime state)
+quotes_counter.txt
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+.claude/

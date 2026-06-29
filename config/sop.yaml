@@ -1,0 +1,26 @@
+company:
+  name: "L&J Coating"
+  phone: "(555) 000-0000"
+  email: "quotes@ljcoating.com"
+  website: "www.ljcoating.com"
+  logo_path: "assets/logo.png"
+
+labor:
+  rate_per_hour: 30.00
+
+tiers:
+  1:
+    label: "Light Prep"
+    description: "Minimal surface preparation — clean surfaces, light sanding, ready to paint."
+    rate_per_sqft: 10.00
+  2:
+    label: "Moderate Prep"
+    description: "Standard preparation — patching, priming, moderate sanding and masking."
+    rate_per_sqft: 20.00
+  3:
+    label: "Heavy Prep"
+    description: "Extensive preparation — detailed scraping, priming, multiple coats, intricate masking."
+    rate_per_sqft: 30.00
+
+payment_terms: "50% deposit required to schedule. Balance due upon completion."
+validity_days: 30
