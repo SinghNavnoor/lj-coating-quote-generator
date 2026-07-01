@@ -1,23 +1,15 @@
-import yaml
-from pathlib import Path
-
-
-def load_sop():
-    sop_path = Path(__file__).parent.parent / "config" / "sop.yaml"
-    with open(sop_path, "r") as f:
-        return yaml.safe_load(f)
-
-
-def calculate_quote(sqft: float, tier: int, sop: dict) -> dict:
-    tier_config = sop["tiers"][tier]
-    rate = tier_config["rate_per_sqft"]
-    total = round(sqft * rate, 2)
-
+def calculate_quote(materials: list, num_workers: int, hourly_rate: float, hours: float) -> dict:
+    materials_total = round(sum(item.get("cost", 0.0) for item in materials), 2)
+    labor_total = round(num_workers * hourly_rate * hours, 2)
+    grand_total = round(materials_total + labor_total, 2)
     return {
-        "sqft": sqft,
-        "tier": tier,
-        "tier_label": tier_config["label"],
-        "tier_description": tier_config["description"],
-        "rate_per_sqft": rate,
-        "total": total,
+        "materials": materials,
+        "materials_total": materials_total,
+        "labor": {
+            "num_workers": num_workers,
+            "hourly_rate": hourly_rate,
+            "hours": hours,
+        },
+        "labor_total": labor_total,
+        "grand_total": grand_total,
     }

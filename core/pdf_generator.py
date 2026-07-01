@@ -194,9 +194,6 @@ def generate_pdf(
         f"Dear {client_name}, thank you for choosing {company['name']}. "
         f"We are pleased to provide this quote for painting services at "
         f"<b>{address}</b>. "
-        f"This proposal covers a total of <b>{result['sqft']:,.0f} sq ft</b> "
-        f"under <b>Tier {result['tier']} — {result['tier_label']}</b> preparation. "
-        f"{result['tier_description']} "
         f"Our team will handle all necessary preparation and application to ensure "
         f"a professional, long-lasting finish."
     )
@@ -207,48 +204,96 @@ def generate_pdf(
     story.append(Paragraph("ITEMIZED ESTIMATE", s["section_header"]))
     story.append(Spacer(1, 0.08 * inch))
 
-    table_data = [
-        [
-            Paragraph("Description", s["body_bold"]),
-            Paragraph("Sq Ft", s["body_bold"]),
-            Paragraph("Rate / Sq Ft", s["body_bold"]),
-            Paragraph("Total", s["body_bold"]),
-        ],
-        [
-            Paragraph(f"Tier {result['tier']} — {result['tier_label']}", s["body"]),
-            Paragraph(f"{result['sqft']:,.0f}", s["body"]),
-            Paragraph(f"${result['rate_per_sqft']:.2f}", s["body"]),
-            Paragraph(f"${result['total']:,.2f}", s["body_bold"]),
-        ],
-        # Blank spacer row
-        ["", "", "", ""],
-        [
-            Paragraph("", s["body"]),
-            Paragraph("", s["body"]),
-            Paragraph("TOTAL", s["total_label"]),
-            Paragraph(f"${result['total']:,.2f}", s["total_value"]),
-        ],
-    ]
+    col_w = [5.0 * inch, 1.6 * inch]
 
-    col_widths = [3.0 * inch, 1.0 * inch, 1.3 * inch, 1.3 * inch]
-    est_table = Table(table_data, colWidths=col_widths, repeatRows=1)
-    est_table.setStyle(TableStyle([
-        # Header row
+    # Materials table
+    mat_rows = [
+        [Paragraph("Materials", s["body_bold"]), Paragraph("Cost", s["body_bold"])],
+    ]
+    visible_materials = [
+        item for item in result["materials"]
+        if item.get("name") or item.get("cost", 0.0) > 0
+    ]
+    for item in visible_materials:
+        mat_rows.append([
+            Paragraph(item.get("name") or "—", s["body"]),
+            Paragraph(f"${item.get('cost', 0.0):,.2f}", s["body"]),
+        ])
+    mat_rows.append([
+        Paragraph("Materials Subtotal", s["body_bold"]),
+        Paragraph(f"${result['materials_total']:,.2f}", s["body_bold"]),
+    ])
+
+    mat_table = Table(mat_rows, colWidths=col_w)
+    mat_style = [
         ("BACKGROUND", (0, 0), (-1, 0), BRAND_DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("ROWBACKGROUNDS", (0, 1), (-1, 1), [LIGHT_GRAY]),
-        # Total row
-        ("LINEABOVE", (2, 3), (-1, 3), 1.5, BRAND_DARK),
-        ("TOPPADDING", (0, 3), (-1, 3), 8),
-        # General
-        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ROWHEIGHT", (0, 0), (-1, -1), 22),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, 1), 0.5, MID_GRAY),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.5, BRAND_DARK),
+        ("TOPPADDING", (0, -1), (-1, -1), 8),
+    ]
+    if len(mat_rows) > 2:
+        mat_style.append(("GRID", (0, 0), (-1, -2), 0.5, MID_GRAY))
+        for idx in range(1, len(mat_rows) - 1):
+            if idx % 2 == 1:
+                mat_style.append(("BACKGROUND", (0, idx), (-1, idx), LIGHT_GRAY))
+    mat_table.setStyle(TableStyle(mat_style))
+    story.append(mat_table)
+    story.append(Spacer(1, 0.15 * inch))
+
+    # Labor table
+    labor = result["labor"]
+    workers = labor["num_workers"]
+    rate = labor["hourly_rate"]
+    hrs = labor["hours"]
+    labor_desc = (
+        f"{workers} worker{'s' if workers != 1 else ''} "
+        f"× ${rate:.2f}/hr "
+        f"× {hrs:.1f} hr{'s' if hrs != 1.0 else ''}"
+    )
+    lab_rows = [
+        [Paragraph("Labor", s["body_bold"]), Paragraph("Cost", s["body_bold"])],
+        [Paragraph(labor_desc, s["body"]), Paragraph(f"${result['labor_total']:,.2f}", s["body"])],
+        [Paragraph("Labor Subtotal", s["body_bold"]), Paragraph(f"${result['labor_total']:,.2f}", s["body_bold"])],
+    ]
+
+    lab_table = Table(lab_rows, colWidths=col_w)
+    lab_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 1), (-1, 1), LIGHT_GRAY),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ROWHEIGHT", (0, 0), (-1, -1), 22),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -2), 0.5, MID_GRAY),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.5, BRAND_DARK),
+        ("TOPPADDING", (0, -1), (-1, -1), 8),
     ]))
-    story.append(est_table)
+    story.append(lab_table)
+    story.append(Spacer(1, 0.1 * inch))
+
+    # Grand total row
+    total_table = Table(
+        [[
+            Paragraph("", s["body"]),
+            Paragraph("GRAND TOTAL", s["total_label"]),
+            Paragraph(f"${result['grand_total']:,.2f}", s["total_value"]),
+        ]],
+        colWidths=[3.0 * inch, 1.7 * inch, 1.9 * inch],
+    )
+    total_table.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEABOVE", (1, 0), (-1, 0), 1.5, BRAND_DARK),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story.append(total_table)
     story.append(_divider())
 
     # ── Terms ──────────────────────────────────────────────────────────────

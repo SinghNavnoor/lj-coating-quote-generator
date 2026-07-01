@@ -1,4 +1,5 @@
 import base64
+import uuid
 
 import streamlit as st
 import yaml
@@ -196,6 +197,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Session state ──────────────────────────────────────────────────────────
+def _new_id():
+    return uuid.uuid4().hex
+
+def _add_material():
+    st.session_state.materials.append({"id": _new_id()})
+
+def _remove_material(mid):
+    st.session_state.materials = [m for m in st.session_state.materials if m["id"] != mid]
+
+if "materials" not in st.session_state:
+    st.session_state.materials = [{"id": _new_id()}]
 if "pdf_bytes" not in st.session_state:
     st.session_state.pdf_bytes = None
 if "pdf_client_name" not in st.session_state:
@@ -233,37 +246,101 @@ with col_left:
 
         st.divider()
 
-        # Job section
+        # Materials section
         st.markdown(
             '<div style="font-size:0.62rem;font-weight:700;color:#aeaeb2;'
             'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.35rem;">'
-            'Job</div>',
+            'Materials</div>',
             unsafe_allow_html=True,
         )
-        j1, j2 = st.columns(2)
-        with j1:
-            sqft = st.number_input("Surface Area (sq ft)", min_value=0, value=0, step=50)
-        with j2:
-            tier_opts = {
-                k: f"Tier {k} — {v['label']}"
-                for k, v in sop["tiers"].items()
-            }
-            tier_choice = st.selectbox(
-                "Prep Tier",
-                options=list(tier_opts.keys()),
-                format_func=lambda k: tier_opts[k],
+
+        # Column headers
+        lh1, lh2, lh3 = st.columns([4, 2, 0.6])
+        with lh1:
+            st.markdown(
+                '<p style="font-size:0.67rem;font-weight:600;color:#8e8e93;'
+                'letter-spacing:0.07em;text-transform:uppercase;margin:0 0 2px 0;">Item Name</p>',
+                unsafe_allow_html=True,
+            )
+        with lh2:
+            st.markdown(
+                '<p style="font-size:0.67rem;font-weight:600;color:#8e8e93;'
+                'letter-spacing:0.07em;text-transform:uppercase;margin:0 0 2px 0;">Cost ($)</p>',
+                unsafe_allow_html=True,
             )
 
-        st.caption(sop["tiers"][tier_choice]["description"])
+        for item in st.session_state.materials:
+            mid = item["id"]
+            c1, c2, c3 = st.columns([4, 2, 0.6])
+            with c1:
+                st.text_input(
+                    "item_name", key=f"name_{mid}",
+                    label_visibility="collapsed",
+                    placeholder="e.g. Brushes, Primer…",
+                )
+            with c2:
+                st.number_input(
+                    "item_cost", key=f"cost_{mid}",
+                    label_visibility="collapsed",
+                    min_value=0.0, value=0.0, step=1.0, format="%.2f",
+                )
+            with c3:
+                st.button(
+                    "×", key=f"del_{mid}",
+                    on_click=_remove_material, args=(mid,),
+                    help="Remove item",
+                )
 
-        if sqft > 0:
-            r = calculate_quote(sqft, tier_choice, sop)
+        st.button("＋ Add Item", key="add_mat", on_click=_add_material)
+
+        # Compute materials total from current widget values
+        materials_items = [
+            {
+                "name": st.session_state.get(f"name_{item['id']}", ""),
+                "cost": float(st.session_state.get(f"cost_{item['id']}", 0.0)),
+            }
+            for item in st.session_state.materials
+        ]
+        materials_total = sum(i["cost"] for i in materials_items)
+
+        st.divider()
+
+        # Labor section
+        st.markdown(
+            '<div style="font-size:0.62rem;font-weight:700;color:#aeaeb2;'
+            'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.35rem;">'
+            'Labor</div>',
+            unsafe_allow_html=True,
+        )
+
+        l1, l2, l3 = st.columns(3)
+        with l1:
+            num_workers = st.number_input("Workers", min_value=1, value=1, step=1, key="labor_workers")
+        with l2:
+            hourly_rate = st.number_input("Rate ($/hr)", min_value=0.0, value=0.0, step=0.50, key="labor_rate", format="%.2f")
+        with l3:
+            hours = st.number_input("Hours", min_value=0.0, value=0.0, step=0.5, key="labor_hours", format="%.1f")
+
+        labor_total = num_workers * hourly_rate * hours
+        grand_total = materials_total + labor_total
+
+        # Live total preview
+        if grand_total > 0:
             st.markdown(
-                f'<div style="display:flex;align-items:center;justify-content:space-between;'
-                f'background:#f5f5f7;border-radius:12px;padding:0.65rem 1rem;margin-top:0.6rem;">'
-                f'<span style="font-size:0.78rem;color:#8e8e93;font-weight:500;">Estimated Total</span>'
-                f'<span style="font-size:1rem;color:#1d1d1f;font-weight:700;">'
-                f'${r["total"]:,.2f}</span></div>',
+                f'<div style="background:#f5f5f7;border-radius:12px;padding:0.65rem 1rem;margin-top:0.6rem;">'
+                f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
+                f'<span style="font-size:0.78rem;color:#8e8e93;">Materials</span>'
+                f'<span style="font-size:0.78rem;color:#1d1d1f;">${materials_total:,.2f}</span>'
+                f'</div>'
+                f'<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'
+                f'<span style="font-size:0.78rem;color:#8e8e93;">Labor</span>'
+                f'<span style="font-size:0.78rem;color:#1d1d1f;">${labor_total:,.2f}</span>'
+                f'</div>'
+                f'<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e5ea;padding-top:6px;">'
+                f'<span style="font-size:0.85rem;color:#8e8e93;font-weight:600;">Estimated Total</span>'
+                f'<span style="font-size:1rem;color:#1d1d1f;font-weight:700;">${grand_total:,.2f}</span>'
+                f'</div>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
 
@@ -291,15 +368,15 @@ with col_mid:
             errors.append("Client name is required.")
         if not address.strip():
             errors.append("Address is required.")
-        if sqft <= 0:
-            errors.append("Surface area must be > 0.")
+        if grand_total <= 0:
+            errors.append("Add at least one material or labor cost.")
 
         if errors:
             for e in errors:
                 st.error(e)
         else:
             with st.spinner(""):
-                result = calculate_quote(sqft, tier_choice, sop)
+                result = calculate_quote(materials_items, num_workers, hourly_rate, hours)
                 st.session_state.pdf_bytes = generate_pdf(
                     client_name=client_name.strip(),
                     address=address.strip(),
@@ -353,4 +430,3 @@ with col_right:
                 '</div>',
                 unsafe_allow_html=True,
             )
-
